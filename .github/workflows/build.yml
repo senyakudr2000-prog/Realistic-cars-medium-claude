@@ -1,0 +1,46 @@
+name: Build mod from source.zip
+
+on:
+  push:
+    branches: [ main, master ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Unpack source.zip
+        run: |
+          rm -rf _src
+          mkdir _src
+          unzip -q source.zip -d _src
+          # Project root = folder that contains build.gradle (zip may have a top-level folder)
+          GRADLE_FILE=$(find _src -maxdepth 3 -name build.gradle | head -n 1)
+          if [ -z "$GRADLE_FILE" ]; then echo "build.gradle not found in source.zip"; exit 1; fi
+          echo "PROJECT_DIR=$(dirname "$GRADLE_FILE")" >> "$GITHUB_ENV"
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: 8.10.2
+
+      - name: Build jar
+        working-directory: ${{ env.PROJECT_DIR }}
+        run: gradle build --no-daemon --stacktrace
+
+      - name: Upload jar
+        uses: actions/upload-artifact@v4
+        with:
+          name: realcars-jar
+          path: |
+            ${{ env.PROJECT_DIR }}/build/libs/*.jar
+            !${{ env.PROJECT_DIR }}/build/libs/*-sources.jar
